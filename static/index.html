@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PokéScope</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #16213e, #0f3460);
+      padding: 2rem;
+      text-align: center;
+      border-bottom: 3px solid #e94560;
+    }
+
+    header h1 {
+      font-size: 2.5rem;
+      color: #fff;
+      letter-spacing: 2px;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span { color: #e94560; }
+
+    header p {
+      color: #a0a0b0;
+      font-size: 0.95rem;
+    }
+
+    .search-container {
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .search-container input {
+      flex: 1;
+      padding: 0.9rem 1.2rem;
+      border: 2px solid #0f3460;
+      border-radius: 8px;
+      background: #16213e;
+      color: #fff;
+      font-size: 1.1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-container input:focus {
+      border-color: #e94560;
+    }
+
+    .search-container input::placeholder { color: #555; }
+
+    .search-container button {
+      padding: 0.9rem 1.5rem;
+      background: #e94560;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .search-container button:hover { background: #c73652; }
+
+    .stats {
+      text-align: center;
+      color: #a0a0b0;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    .cards-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1rem 3rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: #16213e;
+      border-radius: 12px;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: pointer;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 25px rgba(233, 69, 96, 0.3);
+    }
+
+    .card img {
+      width: 100%;
+      aspect-ratio: 63/88;
+      object-fit: cover;
+      background: #0f3460;
+    }
+
+    .card-info {
+      padding: 0.8rem;
+    }
+
+    .card-info h3 {
+      font-size: 0.95rem;
+      color: #fff;
+      margin-bottom: 0.3rem;
+    }
+
+    .card-info .meta {
+      font-size: 0.8rem;
+      color: #a0a0b0;
+    }
+
+    .card-info .types {
+      display: flex;
+      gap: 0.3rem;
+      margin-top: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .type-badge {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+
+    .type-Fire       { background: #f0803020; color: #f08030; border: 1px solid #f0803050; }
+    .type-Water      { background: #688ef020; color: #688ef0; border: 1px solid #688ef050; }
+    .type-Grass      { background: #78c85020; color: #78c850; border: 1px solid #78c85050; }
+    .type-Lightning  { background: #f8d03020; color: #f8d030; border: 1px solid #f8d03050; }
+    .type-Psychic    { background: #f8589820; color: #f85898; border: 1px solid #f8589850; }
+    .type-Fighting   { background: #c0302820; color: #c03028; border: 1px solid #c0302850; }
+    .type-Darkness   { background: #70584820; color: #a08060; border: 1px solid #70584850; }
+    .type-Metal      { background: #b8b8d020; color: #b8b8d0; border: 1px solid #b8b8d050; }
+    .type-Dragon     { background: #7038f820; color: #7038f8; border: 1px solid #7038f850; }
+    .type-Fairy      { background: #ee99ee20; color: #ee99ee; border: 1px solid #ee99ee50; }
+    .type-Colorless  { background: #a8a87820; color: #a8a878; border: 1px solid #a8a87850; }
+
+    .pagination {
+      text-align: center;
+      padding: 1rem;
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .pagination button {
+      padding: 0.5rem 1rem;
+      background: #0f3460;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .pagination button:hover { background: #e94560; }
+    .pagination button:disabled { opacity: 0.3; cursor: default; }
+    .pagination button:disabled:hover { background: #0f3460; }
+
+    .empty {
+      text-align: center;
+      padding: 4rem 1rem;
+      color: #555;
+      font-size: 1.2rem;
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal-overlay img {
+      max-height: 90vh;
+      max-width: 90vw;
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Poké<span>Scope</span></h1>
+    <p>Search 200+ Pokémon Trading Cards</p>
+  </header>
+
+  <div class="search-container">
+    <input type="text" id="search" placeholder="Search cards... (e.g. charizard, fire, trainer)" autofocus>
+    <button onclick="doSearch()">Search</button>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <div class="cards-grid" id="grid"></div>
+  <div class="pagination" id="pagination"></div>
+  <div class="empty" id="empty">Type a name, type, or keyword to search</div>
+
+  <div class="modal-overlay" id="modal" onclick="this.classList.remove('active')">
+    <img id="modal-img" src="" alt="">
+  </div>
+
+  <script>
+    const LIMIT = 20;
+    let currentQuery = '';
+    let currentOffset = 0;
+    let currentTotal = 0;
+
+    const searchInput = document.getElementById('search');
+    const grid = document.getElementById('grid');
+    const stats = document.getElementById('stats');
+    const pagination = document.getElementById('pagination');
+    const empty = document.getElementById('empty');
+
+    searchInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    async function doSearch(offset = 0) {
+      const q = searchInput.value.trim();
+      if (!q) return;
+
+      currentQuery = q;
+      currentOffset = offset;
+
+      const res = await fetch(`/api/cards/search?q=${encodeURIComponent(q)}&limit=${LIMIT}&offset=${offset}`);
+      const data = await res.json();
+      currentTotal = data.total;
+
+      if (data.cards.length === 0) {
+        grid.innerHTML = '';
+        stats.textContent = '';
+        pagination.innerHTML = '';
+        empty.textContent = `No cards found for "${q}"`;
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+      stats.textContent = `${data.total} card${data.total !== 1 ? 's' : ''} found for "${q}"`;
+
+      grid.innerHTML = data.cards.map(card => `
+        <div class="card" onclick="showLarge('${card.image_large || card.image_small || ''}')">
+          <img src="${card.image_small || ''}"
+               alt="${card.name}"
+               loading="lazy"
+               onerror="this.style.display='none'">
+          <div class="card-info">
+            <h3>${card.name}</h3>
+            <div class="meta">${card.set_name || ''}${card.hp ? ' &middot; HP ' + card.hp : ''}${card.rarity ? ' &middot; ' + card.rarity : ''}</div>
+            <div class="types">
+              ${(card.types || []).map(t => `<span class="type-badge type-${t}">${t}</span>`).join('')}
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      const totalPages = Math.ceil(data.total / LIMIT);
+      const currentPage = Math.floor(offset / LIMIT) + 1;
+
+      if (totalPages > 1) {
+        pagination.innerHTML = `
+          <button onclick="doSearch(${offset - LIMIT})" ${offset === 0 ? 'disabled' : ''}>Prev</button>
+          <span style="color:#a0a0b0;padding:0.5rem">Page ${currentPage} of ${totalPages}</span>
+          <button onclick="doSearch(${offset + LIMIT})" ${currentPage >= totalPages ? 'disabled' : ''}>Next</button>
+        `;
+      } else {
+        pagination.innerHTML = '';
+      }
+    }
+
+    function showLarge(url) {
+      if (!url) return;
+      document.getElementById('modal-img').src = url;
+      document.getElementById('modal').classList.add('active');
+    }
+  </script>
+</body>
+</html>

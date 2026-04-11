@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Seed data (large JSON files)
+scripts/seed_data/
+
+# Old seed files
+scripts/seed_data_*.json
+
+# Logs
+*.log
+
+# OS
+.DS_Store

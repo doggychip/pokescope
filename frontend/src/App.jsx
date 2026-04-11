@@ -1,0 +1,343 @@
+import { useState, useEffect, useMemo, useCallback } from "react";
+import "./App.css";
+
+const ERAS = ["All", "WOTC", "Gold Star", "e-Series", "Promo", "Modern", "Classic"];
+const LANGS = ["All", "EN", "JP"];
+const SORT_OPTIONS = [
+  { key: "bubble", label: "Bubble Risk" },
+  { key: "undervalued", label: "Most Undervalued" },
+  { key: "overvalued", label: "Most Overvalued" },
+  { key: "social", label: "Social Buzz" },
+  { key: "appreciation", label: "12m Return" },
+  { key: "scarcity", label: "Scarcity" },
+  { key: "price", label: "Price" },
+];
+
+function getValuation(card) {
+  if (!card.price || !card.fair_value) return { label: "N/A", color: "#6b7280", bg: "rgba(107,114,128,0.1)" };
+  const diff = (card.price - card.fair_value) / card.fair_value;
+  if (diff > 0.15) return { label: "OVERVALUED", color: "#ef4444", bg: "rgba(239,68,68,0.1)" };
+  if (diff < -0.15) return { label: "UNDERVALUED", color: "#22c55e", bg: "rgba(34,197,94,0.1)" };
+  return { label: "FAIR", color: "#f59e0b", bg: "rgba(245,158,11,0.1)" };
+}
+
+function getBubbleRisk(val) {
+  if (val == null) return { label: "N/A", color: "#6b7280", icon: "\u26aa" };
+  if (val > 0.3) return { label: "HIGH", color: "#ef4444", icon: "\ud83d\udd34" };
+  if (val > 0.1) return { label: "MODERATE", color: "#f59e0b", icon: "\ud83d\udfe1" };
+  return { label: "LOW", color: "#22c55e", icon: "\ud83d\udfe2" };
+}
+
+function getScarcity(pop) {
+  if (pop == null) return { label: "N/A", color: "#6b7280" };
+  if (pop <= 50) return { label: "ULTRA RARE", color: "#a855f7" };
+  if (pop <= 100) return { label: "VERY SCARCE", color: "#6366f1" };
+  if (pop <= 300) return { label: "SCARCE", color: "#3b82f6" };
+  if (pop <= 600) return { label: "MODERATE", color: "#f59e0b" };
+  return { label: "COMMON", color: "#6b7280" };
+}
+
+function Badge({ label, color, bg }) {
+  return (
+    <span className="badge" style={{ color, background: bg || `${color}18`, border: `1px solid ${color}30` }}>
+      {label}
+    </span>
+  );
+}
+
+function MiniBar({ value, max, color }) {
+  return (
+    <div className="mini-bar-track">
+      <div className="mini-bar-fill" style={{ width: `${Math.min((value / max) * 100, 100)}%`, background: color }} />
+    </div>
+  );
+}
+
+function Sparkline({ prices, color }) {
+  const valid = prices.filter(p => p != null);
+  if (valid.length < 2) return null;
+  const min = Math.min(...valid);
+  const max = Math.max(...valid);
+  const range = max - min || 1;
+  const h = 28, w = 80;
+  const points = valid.map((p, i) => `${(i / (valid.length - 1)) * w},${h - ((p - min) / range) * h}`).join(" ");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={w} cy={h - ((valid[valid.length - 1] - min) / range) * h} r="2.5" fill={color} />
+    </svg>
+  );
+}
+
+function getAnalysis(card) {
+  const valueDiff = card.fair_value ? ((card.price - card.fair_value) / card.fair_value * 100).toFixed(1) : 0;
+  const ret12m = card.price_12mo ? ((card.price - card.price_12mo) / card.price_12mo * 100).toFixed(1) : 0;
+
+  if (Number(valueDiff) < -15) {
+    return `${card.name} appears undervalued by ${Math.abs(Number(valueDiff))}% relative to fair market value. With a PSA 10 population of only ${card.psa10_pop} and a ${ret12m}% 12-month return, the scarcity-to-price ratio suggests significant upside potential. ${card.social_score > 75 ? "Strong social media interest supports continued demand." : "Social engagement is currently low \u2014 watch for catalysts."}`;
+  }
+  if (Number(valueDiff) > 15) {
+    return `${card.name} is trading ${valueDiff}% above estimated fair value. ${card.psa10_pop > 500 ? `The high PSA 10 population of ${card.psa10_pop.toLocaleString()} limits scarcity premium.` : "Scarcity supports some premium, but current pricing appears stretched."} ${card.bubble > 0.2 ? "Bubble risk is elevated \u2014 consider waiting for a correction before entering." : "Monitor for stabilization before adding."}`;
+  }
+  return `${card.name} is trading near fair value. ${card.psa10_pop < 100 ? `With only ${card.psa10_pop} PSA 10 copies, long-term scarcity dynamics are favorable.` : "Population is moderate \u2014 focus on grade quality and presentation."} ${Number(ret12m) > 30 ? "Strong recent momentum suggests continued collector interest." : "Steady appreciation with moderate volatility."}`;
+}
+
+function DetailPanel({ card }) {
+  const valuation = getValuation(card);
+  const bubble = getBubbleRisk(card.bubble);
+  const scarcity = getScarcity(card.psa10_pop);
+  const ret12m = card.price_12mo ? ((card.price - card.price_12mo) / card.price_12mo * 100).toFixed(1) : "N/A";
+  const ret6m = card.price_6mo ? ((card.price - card.price_6mo) / card.price_6mo * 100).toFixed(1) : "N/A";
+  const valueDiff = card.fair_value ? ((card.price - card.fair_value) / card.fair_value * 100).toFixed(1) : "0";
+  const pricePerPop = card.psa10_pop ? (card.price / card.psa10_pop).toFixed(0) : "N/A";
+
+  const metrics = [
+    { label: "PSA 10 POP", value: card.psa10_pop?.toLocaleString() || "N/A", sub: scarcity.label, subColor: scarcity.color },
+    { label: "PSA 9 POP", value: card.psa9_pop?.toLocaleString() || "N/A", sub: card.psa10_pop && card.psa9_pop ? `${(card.psa10_pop / card.psa9_pop * 100).toFixed(1)}% upgrade rate` : "", subColor: "#6b7280" },
+    { label: "PRICE/POP RATIO", value: pricePerPop !== "N/A" ? `$${pricePerPop}` : "N/A", sub: Number(pricePerPop) > 100 ? "Strong value signal" : "Weak scarcity premium", subColor: Number(pricePerPop) > 100 ? "#22c55e" : "#f59e0b" },
+    { label: "12M RETURN", value: ret12m !== "N/A" ? `${Number(ret12m) >= 0 ? "+" : ""}${ret12m}%` : "N/A", sub: ret6m !== "N/A" ? `6m: ${Number(ret6m) >= 0 ? "+" : ""}${ret6m}%` : "", subColor: Number(ret12m) >= 0 ? "#22c55e" : "#ef4444", valueColor: Number(ret12m) >= 0 ? "#22c55e" : "#ef4444" },
+    { label: "SOCIAL SCORE", value: card.social_score != null ? `${card.social_score}/100` : "N/A", sub: card.social_score > 80 ? "High buzz" : card.social_score > 60 ? "Moderate buzz" : "Low buzz", subColor: card.social_score > 80 ? "#6366f1" : "#6b7280" },
+    { label: "BUBBLE RISK", value: `${bubble.icon} ${bubble.label}`, sub: card.bubble != null ? `Score: ${(card.bubble * 100).toFixed(0)}%` : "", subColor: bubble.color },
+  ];
+
+  return (
+    <div className="detail-panel">
+      <div className="detail-header">
+        <div>
+          <div className="detail-title">
+            {card.image_small && <img src={card.image_small} alt="" className="card-thumb" />}
+            <h2>{card.name}</h2>
+            <Badge label={valuation.label} color={valuation.color} />
+          </div>
+          <p className="detail-subtitle">{card.set_name} {card.number ? `\u00b7 ${card.number}` : ""} \u00b7 {card.lang || "EN"} \u00b7 {card.grade || "Ungraded"}</p>
+        </div>
+        <div className="detail-price">
+          <div className="price-value">${card.price?.toLocaleString() || "N/A"}</div>
+          <div className="price-diff" style={{ color: Number(valueDiff) > 0 ? "#ef4444" : "#22c55e" }}>
+            {Number(valueDiff) > 0 ? "+" : ""}{valueDiff}% vs fair value (${card.fair_value?.toLocaleString() || "N/A"})
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-grid">
+        {metrics.map((m, i) => (
+          <div key={i} className="detail-metric">
+            <div className="metric-label">{m.label}</div>
+            <div className="metric-value" style={{ color: m.valueColor || "#fff" }}>{m.value}</div>
+            <div className="metric-sub" style={{ color: m.subColor }}>{m.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="ai-analysis">
+        <div className="ai-label">AI ANALYSIS</div>
+        <p>{getAnalysis(card)}</p>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [cards, setCards] = useState([]);
+  const [stats, setStats] = useState({ undervalued: 0, overvalued: 0, bubble_risk: 0, avg_return: 0 });
+  const [sortBy, setSortBy] = useState("bubble");
+  const [filterEra, setFilterEra] = useState("All");
+  const [filterLang, setFilterLang] = useState("All");
+  const [search, setSearch] = useState("");
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [modalImg, setModalImg] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchCards = useCallback(async () => {
+    const params = new URLSearchParams({ sort: sortBy, limit: "200" });
+    if (filterEra !== "All") params.set("era", filterEra);
+    if (filterLang !== "All") params.set("lang", filterLang);
+    if (search.trim()) params.set("q", search.trim());
+
+    try {
+      const res = await fetch(`/api/cards/market?${params}`);
+      const data = await res.json();
+      setCards(data.cards || []);
+    } catch (e) {
+      console.error("Failed to fetch cards:", e);
+    }
+    setLoading(false);
+  }, [sortBy, filterEra, filterLang, search]);
+
+  useEffect(() => {
+    fetchCards();
+  }, [fetchCards]);
+
+  useEffect(() => {
+    fetch("/api/cards/stats")
+      .then(r => r.json())
+      .then(setStats)
+      .catch(console.error);
+  }, []);
+
+  const statItems = [
+    { label: "UNDERVALUED", value: stats.undervalued, color: "#22c55e", suffix: " cards" },
+    { label: "OVERVALUED", value: stats.overvalued, color: "#ef4444", suffix: " cards" },
+    { label: "BUBBLE RISK", value: stats.bubble_risk, color: "#f59e0b", suffix: " cards" },
+    { label: "AVG 12M RETURN", value: `${(stats.avg_return * 100).toFixed(0)}%`, color: stats.avg_return > 0 ? "#22c55e" : "#ef4444", suffix: "" },
+  ];
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="header">
+        <div className="header-inner">
+          <div className="header-brand">
+            <span style={{ fontSize: 22 }}>&#9889;</span>
+            <div>
+              <h1>POK&Eacute;SCOPE</h1>
+              <p>PTCG MARKET INTELLIGENCE</p>
+            </div>
+          </div>
+          <div className="header-status">
+            <span className="status-dot" />
+            LIVE &middot; {cards.length} cards tracked &middot; Apr 2026
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Bar */}
+      <div className="stats-bar">
+        {statItems.map((s, i) => (
+          <div key={i} className="stat-item">
+            <div className="stat-label">{s.label}</div>
+            <div className="stat-value" style={{ color: s.color }}>
+              {s.value}{s.suffix}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="filters">
+        <input
+          type="text"
+          className="search-input"
+          placeholder="Search cards..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        <div className="filter-group">
+          {ERAS.map(e => (
+            <button key={e} className={`filter-btn ${filterEra === e ? "active" : ""}`} onClick={() => setFilterEra(e)}>
+              {e}
+            </button>
+          ))}
+        </div>
+        <div className="filter-group">
+          {LANGS.map(l => (
+            <button key={l} className={`filter-btn ${filterLang === l ? "active" : ""}`} onClick={() => setFilterLang(l)}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <select className="sort-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          {SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+        </select>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="loading">Loading market data...</div>
+      ) : (
+        <div className="table-wrap">
+          <table className="card-table">
+            <thead>
+              <tr>
+                {["CARD", "ERA", "GRADE", "PRICE", "FAIR VALUE", "SIGNAL", "PSA 10 POP", "SCARCITY", "12M TREND", "12M RETURN", "SOCIAL", "BUBBLE"].map(h => (
+                  <th key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cards.map(card => {
+                const valuation = getValuation(card);
+                const bubble = getBubbleRisk(card.bubble);
+                const scarcity = getScarcity(card.psa10_pop);
+                const ret12m = card.price_12mo ? ((card.price - card.price_12mo) / card.price_12mo * 100).toFixed(0) : null;
+                const prices = [card.price_12mo, card.price_6mo, card.price_6mo && card.price ? (card.price_6mo + card.price) / 2 : null, card.price];
+                const trendColor = card.price > (card.price_12mo || 0) ? "#22c55e" : "#ef4444";
+
+                return (
+                  <tr
+                    key={card.id}
+                    className={selectedCard?.id === card.id ? "selected" : ""}
+                    onClick={() => setSelectedCard(selectedCard?.id === card.id ? null : card)}
+                  >
+                    <td>
+                      <div className="card-cell">
+                        {card.image_small && (
+                          <img
+                            src={card.image_small}
+                            alt=""
+                            className="card-thumb"
+                            loading="lazy"
+                            onClick={e => { e.stopPropagation(); setModalImg(card.image_large || card.image_small); }}
+                          />
+                        )}
+                        <div>
+                          <div className="card-name">{card.name}</div>
+                          <div className="card-set">{card.set_name} {card.number ? `\u00b7 ${card.number}` : ""}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="era-badge">{card.era || "\u2014"}</span>
+                      <span className={`lang-badge lang-${card.lang || "EN"}`}>{card.lang || "EN"}</span>
+                    </td>
+                    <td style={{ fontSize: 10, color: "#9ca3af" }}>{card.grade || "\u2014"}</td>
+                    <td style={{ fontWeight: 700, color: "#fff", fontFamily: "'Space Grotesk', sans-serif" }}>
+                      ${card.price?.toLocaleString() || "\u2014"}
+                    </td>
+                    <td style={{ color: "#9ca3af" }}>${card.fair_value?.toLocaleString() || "\u2014"}</td>
+                    <td><Badge label={valuation.label} color={valuation.color} /></td>
+                    <td>
+                      <span style={{ color: card.psa10_pop <= 100 ? "#a855f7" : "#9ca3af", fontWeight: card.psa10_pop <= 100 ? 600 : 400 }}>
+                        {card.psa10_pop?.toLocaleString() || "\u2014"}
+                      </span>
+                    </td>
+                    <td><Badge label={scarcity.label} color={scarcity.color} /></td>
+                    <td><Sparkline prices={prices} color={trendColor} /></td>
+                    <td style={{ fontWeight: 600, color: ret12m != null ? (Number(ret12m) >= 0 ? "#22c55e" : "#ef4444") : "#6b7280" }}>
+                      {ret12m != null ? `${Number(ret12m) >= 0 ? "+" : ""}${ret12m}%` : "\u2014"}
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <MiniBar value={card.social_score || 0} max={100} color={card.social_score > 80 ? "#6366f1" : "#4b5563"} />
+                        <span style={{ fontSize: 10, color: card.social_score > 80 ? "#a5b4fc" : "#6b7280" }}>{card.social_score ?? "\u2014"}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: 10 }}>{bubble.icon}</span>
+                      <span style={{ fontSize: 10, marginLeft: 4, color: bubble.color, fontWeight: 600 }}>{bubble.label}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Detail Panel */}
+      {selectedCard && <DetailPanel card={selectedCard} />}
+
+      {/* Image Modal */}
+      {modalImg && (
+        <div className="modal-overlay" onClick={() => setModalImg(null)}>
+          <img src={modalImg} alt="Card" />
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="footer">
+        POK&Eacute;SCOPE MVP &middot; Data sourced from eBay, Fanatics Collect, PriceCharting, PSA Pop Reports &middot; Not financial advice &middot; Built for collectors, by collectors
+      </div>
+    </div>
+  );
+}
