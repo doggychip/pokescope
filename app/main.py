@@ -308,7 +308,14 @@ async def stripe_webhook(request: Request):
 
 @app.api_route("/api/admin/seed", methods=["GET", "POST"])
 async def seed_database(request: Request):
-    """Fetch cards from PokémonTCG API and seed into database. Admin only."""
+    """Fetch cards from PokémonTCG API and seed into database.
+
+    Query params:
+      page: start page (default 1)
+      pages: number of pages to fetch (default 5, max 20)
+
+    Call repeatedly: /api/admin/seed?page=1, then ?page=6, ?page=11, etc.
+    """
     import subprocess
     import json
     import random
@@ -332,12 +339,15 @@ async def seed_database(request: Request):
         if "promo" in s: return "Promo"
         return "Classic"
 
+    params = request.query_params
+    start_page = int(params.get("page", "1"))
+    max_pages = min(int(params.get("pages", "5")), 20)
     total_inserted = 0
-    page = 1
+    page = start_page
     PAGE_SIZE = 250
 
     async with get_conn() as conn:
-        while True:
+        while page < start_page + max_pages:
             url = f"https://api.pokemontcg.io/v2/cards?page={page}&pageSize={PAGE_SIZE}"
             try:
                 result = subprocess.run(
@@ -405,10 +415,10 @@ async def seed_database(request: Request):
             total_count = data.get("totalCount", 0)
 
             if len(batch) < PAGE_SIZE or total_inserted >= total_count:
-                break
+                return {"seeded": total_inserted, "done": True, "total_in_api": total_count}
             page += 1
 
-    return {"seeded": total_inserted}
+    return {"seeded": total_inserted, "done": False, "next_page": page, "next_url": f"/api/admin/seed?page={page}&pages={max_pages}"}
 
 
 # SPA fallback — serve index.html for all non-API routes (React Router)
