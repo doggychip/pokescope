@@ -17,9 +17,9 @@ COPY frontend/package.json frontend/package-lock.json ./frontend/
 RUN cd frontend && npm ci
 
 COPY frontend/ ./frontend/
-ARG VITE_CLERK_PUBLISHABLE_KEY=pk_test_PLACEHOLDER
-ARG VITE_STRIPE_PUBLISHABLE_KEY=""
-ARG VITE_API_URL=""
+ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY:-pk_test_dG91Y2hpbmctaGFsaWJ1dC03MS5jbGVyay5hY2NvdW50cy5kZXYk}
+ENV VITE_STRIPE_PUBLISHABLE_KEY=${VITE_STRIPE_PUBLISHABLE_KEY:-}
+ENV VITE_API_URL=${VITE_API_URL:-}
 RUN cd frontend && npm run build
 
 # Copy backend
