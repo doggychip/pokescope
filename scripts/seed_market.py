@@ -3,6 +3,7 @@
 import os
 import random
 import psycopg
+from bubble import compute_bubble
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost/pokescope")
 
@@ -47,8 +48,12 @@ def main():
 
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
-            # Insert featured cards
+            # Insert featured cards — compute bubble from market signals
             for card in FEATURED_CARDS:
+                card["bubble"] = compute_bubble(
+                    card["price"], card["fair_value"], card["price_12mo"],
+                    card["social_score"], card["psa10_pop"],
+                )
                 cur.execute("""
                     INSERT INTO cards (id, name, supertype, subtypes, types, hp,
                                        set_name, set_series, rarity, artist,
@@ -83,10 +88,12 @@ def main():
                 base_price = random.randint(50, 800) if not is_holo else random.randint(200, 3000)
                 psa10_pop = random.randint(100, 5000)
                 psa9_pop = psa10_pop * random.randint(2, 6)
-                bubble = round(random.uniform(-0.4, 0.3), 2)
                 fair_value = int(base_price * random.uniform(0.8, 1.3))
                 price_12mo = int(base_price * random.uniform(0.5, 0.9))
                 price_6mo = int(base_price * random.uniform(0.7, 1.1))
+
+                social_score = random.randint(20, 95)
+                bubble = compute_bubble(base_price, fair_value, price_12mo, social_score, psa10_pop)
 
                 cur.execute("""
                     UPDATE cards SET
@@ -101,7 +108,7 @@ def main():
                     base_price, fair_value,
                     psa10_pop, psa9_pop,
                     price_6mo, price_12mo,
-                    random.randint(20, 95), bubble,
+                    social_score, bubble,
                     card_id,
                 ))
 

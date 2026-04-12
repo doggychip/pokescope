@@ -5,6 +5,7 @@ import json
 import os
 import random
 import psycopg
+from bubble import compute_bubble
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost/pokescope")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -56,13 +57,14 @@ def generate_market_data(card, rarity, set_series):
         psa10_pop = random.randint(10, 500)
     psa9_pop = psa10_pop * random.randint(2, 7)
 
-    bubble = round(random.uniform(-0.45, 0.45), 2)
     fair_value = int(base_price * random.uniform(0.75, 1.35))
     price_12mo = int(base_price * random.uniform(0.4, 0.95))
     price_6mo = int(base_price * random.uniform(0.6, 1.15))
     social_score = random.randint(15, 98)
     if is_holo:
         social_score = max(social_score, random.randint(50, 98))
+
+    bubble = compute_bubble(base_price, fair_value, price_12mo, social_score, psa10_pop)
 
     return {
         "era": era,
