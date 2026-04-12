@@ -65,17 +65,24 @@ CREATE INDEX IF NOT EXISTS idx_cards_name   ON cards (lower(name));
 async def run_migrations() -> None:
     """Run schema migrations on startup."""
     import psycopg
-    with psycopg.connect(DATABASE_URL) as conn:
-        conn.execute(SCHEMA_SQL)
-        conn.commit()
-    print("Database migrations complete.")
+    try:
+        print(f"Connecting to database: {DATABASE_URL[:30]}...")
+        with psycopg.connect(DATABASE_URL) as conn:
+            conn.execute(SCHEMA_SQL)
+            conn.commit()
+        print("Database migrations complete.")
+    except Exception as e:
+        print(f"WARNING: Migration failed: {e}")
+        print("App will start but database may not be ready.")
 
 
 async def open_pool() -> None:
     global pool
+    print(f"DATABASE_URL configured: {'yes' if DATABASE_URL else 'NO — set DATABASE_URL env var'}")
     await run_migrations()
-    pool = AsyncConnectionPool(DATABASE_URL, min_size=2, max_size=10)
+    pool = AsyncConnectionPool(DATABASE_URL, min_size=1, max_size=10)
     await pool.open()
+    print("Connection pool opened.")
 
 
 async def close_pool() -> None:

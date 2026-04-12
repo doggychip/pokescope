@@ -4,8 +4,11 @@ import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from dotenv import load_dotenv
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not required in production
 
 import stripe
 from fastapi import FastAPI, Query, Request
