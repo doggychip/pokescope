@@ -199,6 +199,25 @@ export default function App() {
   const [modalImg, setModalImg] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Handle ?upgrade=pro or ?upgrade=dealer from pricing page
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const upgradeTier = params.get("upgrade");
+    if (upgradeTier && (upgradeTier === "pro" || upgradeTier === "dealer")) {
+      // Clean up URL
+      window.history.replaceState({}, "", "/dashboard");
+      // Trigger Stripe checkout
+      fetch(`${API_BASE}/api/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier: upgradeTier }),
+      })
+        .then(r => r.json())
+        .then(data => { if (data.url) window.location.href = data.url; })
+        .catch(e => console.error("Checkout failed:", e));
+    }
+  }, []);
+
   const fetchCards = useCallback(async () => {
     const params = new URLSearchParams({ sort: sortBy, limit: "200" });
     if (filterEra !== "All") params.set("era", filterEra);

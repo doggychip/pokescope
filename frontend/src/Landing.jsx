@@ -65,6 +65,7 @@ const TIERS = [
   },
   {
     name: "Pro",
+    tier: "pro",
     price: "$12",
     period: "/month",
     cta: "Start 14-Day Free Trial",
@@ -83,6 +84,7 @@ const TIERS = [
   },
   {
     name: "Dealer",
+    tier: "dealer",
     price: "$49",
     period: "/month",
     cta: "Contact Sales",
@@ -224,7 +226,13 @@ export default function Landing() {
               </div>
               <button
                 className={tier.highlight ? "btn-primary" : "btn-secondary"}
-                onClick={() => navigate(isDevMode ? "/dashboard" : "/sign-up")}
+                onClick={() => {
+                  if (tier.tier) {
+                    navigate(isDevMode ? `/dashboard?upgrade=${tier.tier}` : `/sign-up?redirect_url=/dashboard?upgrade=${tier.tier}`);
+                  } else {
+                    navigate(isDevMode ? "/dashboard" : "/sign-up");
+                  }
+                }}
               >
                 {tier.cta}
               </button>
