@@ -50,16 +50,28 @@ app = FastAPI(title="PokéScope", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:8080", "*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
+
+
 @app.get("/")
 async def index():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    # Serve Vite build if available, otherwise fallback to static/index.html
+    for d in [FRONTEND_DIR, STATIC_DIR]:
+        idx = os.path.join(d, "index.html")
+        if os.path.exists(idx):
+            return FileResponse(idx)
+    return {"error": "No frontend build found"}
 
+
+# Mount Vite build assets if available
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -283,3 +295,16 @@ async def stripe_webhook(request: Request):
         # TODO: Downgrade user to free plan
 
     return {"received": True}
+
+
+# SPA fallback — serve index.html for all non-API routes (React Router)
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    # Don't catch API or static asset routes
+    if full_path.startswith("api/") or full_path.startswith("static/") or full_path.startswith("assets/"):
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+    for d in [FRONTEND_DIR, STATIC_DIR]:
+        idx = os.path.join(d, "index.html")
+        if os.path.exists(idx):
+            return FileResponse(idx)
+    return JSONResponse(status_code=404, content={"detail": "Not found"})
