@@ -421,6 +421,41 @@ async def seed_database(request: Request):
     return {"seeded": total_inserted, "done": False, "next_page": page, "next_url": f"/api/admin/seed?page={page}&pages={max_pages}"}
 
 
+@app.post("/api/admin/import")
+async def import_cards(request: Request):
+    """Bulk import cards from JSON body."""
+    cards = await request.json()
+    if not isinstance(cards, list):
+        return JSONResponse(status_code=400, content={"detail": "Expected JSON array"})
+
+    inserted = 0
+    async with get_conn() as conn:
+        for card in cards:
+            await conn.execute(
+                """INSERT INTO cards (id, name, supertype, subtypes, types, hp,
+                    set_name, set_series, rarity, artist, image_small, image_large,
+                    number, era, lang, grade, price, fair_value, psa10_pop, psa9_pop,
+                    price_6mo, price_12mo, social_score, bubble)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (id) DO UPDATE SET
+                    name=EXCLUDED.name, image_small=EXCLUDED.image_small, image_large=EXCLUDED.image_large,
+                    price=EXCLUDED.price, fair_value=EXCLUDED.fair_value, psa10_pop=EXCLUDED.psa10_pop,
+                    psa9_pop=EXCLUDED.psa9_pop, price_6mo=EXCLUDED.price_6mo, price_12mo=EXCLUDED.price_12mo,
+                    social_score=EXCLUDED.social_score, bubble=EXCLUDED.bubble
+                """,
+                (card["id"], card["name"], card.get("supertype"), card.get("subtypes"),
+                 card.get("types"), card.get("hp"),
+                 card.get("set_name"), card.get("set_series"), card.get("rarity"), card.get("artist"),
+                 card.get("image_small"), card.get("image_large"),
+                 card.get("number"), card.get("era"), card.get("lang", "EN"), card.get("grade"),
+                 card.get("price"), card.get("fair_value"), card.get("psa10_pop"), card.get("psa9_pop"),
+                 card.get("price_6mo"), card.get("price_12mo"), card.get("social_score"), card.get("bubble")),
+            )
+            inserted += 1
+
+    return {"imported": inserted}
+
+
 # SPA fallback — serve index.html for all non-API routes (React Router)
 @app.get("/{full_path:path}")
 async def spa_fallback(full_path: str):
