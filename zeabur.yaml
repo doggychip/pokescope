@@ -1,0 +1,38 @@
+services:
+  - name: api
+    type: web
+    root: /
+    build:
+      type: python
+      python:
+        entry: app.main:app
+        framework: fastapi
+    env:
+      DATABASE_URL: ${POSTGRES_CONNECTION_STRING}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
+    ports:
+      - port: 8080
+        type: http
+
+  - name: frontend
+    type: web
+    root: /frontend
+    build:
+      type: nodejs
+      nodejs:
+        build_command: npm run build
+        output_dir: dist
+    env:
+      VITE_CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
+      VITE_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+    ports:
+      - port: 3000
+        type: http
+
+  - name: postgres
+    type: database
+    database:
+      type: postgresql

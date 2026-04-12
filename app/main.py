@@ -2,13 +2,20 @@
 
 import os
 from contextlib import asynccontextmanager
-from typing import List, Optional
-from fastapi import FastAPI, Query
+from typing import Optional
+
+from dotenv import load_dotenv
+load_dotenv()
+
+import stripe
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from app.db import open_pool, close_pool, get_conn
 from app.models import Card, SearchResult
+from app.auth import verify_clerk_token, require_auth
+from app.payments import create_checkout_session, create_portal_session, ensure_products
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 
@@ -173,6 +180,106 @@ async def get_card(card_id: str):
         )
         r = await row.fetchone()
         if not r:
-            from fastapi.responses import JSONResponse
             return JSONResponse(status_code=404, content={"detail": "Card not found"})
         return row_to_card(r)
+
+
+# --- Auth & Payment Endpoints ---
+
+@app.get("/api/user/me")
+async def get_current_user(request: Request):
+    """Get current user info and subscription status."""
+    claims = await verify_clerk_token(request)
+    if claims is None:
+        return {"authenticated": False, "plan": "free"}
+
+    user_id = claims.get("sub", "")
+    # In production, look up Stripe customer by clerk user ID
+    # For now, return basic info
+    return {
+        "authenticated": True,
+        "user_id": user_id,
+        "plan": claims.get("plan", "free"),
+    }
+
+
+@app.post("/api/checkout")
+async def create_checkout(request: Request):
+    """Create a Stripe Checkout Session for upgrading."""
+    claims = await require_auth(request)
+    body = await request.json()
+    tier = body.get("tier", "pro")
+    user_id = claims.get("sub", "")
+
+    if tier not in ("pro", "dealer"):
+        return JSONResponse(status_code=400, content={"detail": "Invalid tier"})
+
+    try:
+        url = await create_checkout_session(
+            tier=tier,
+            clerk_user_id=user_id,
+            success_url="http://localhost:3000/dashboard?upgraded=true",
+            cancel_url="http://localhost:3000/#pricing",
+        )
+        return {"url": url}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@app.post("/api/portal")
+async def customer_portal(request: Request):
+    """Create a Stripe Customer Portal session for managing subscription."""
+    claims = await require_auth(request)
+    body = await request.json()
+    customer_id = body.get("stripe_customer_id")
+
+    if not customer_id:
+        return JSONResponse(status_code=400, content={"detail": "No customer ID"})
+
+    try:
+        url = await create_portal_session(
+            stripe_customer_id=customer_id,
+            return_url="http://localhost:3000/dashboard",
+        )
+        return {"url": url}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@app.post("/api/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events for subscription lifecycle."""
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+
+    if webhook_secret:
+        try:
+            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        except (ValueError, stripe.error.SignatureVerificationError):
+            return JSONResponse(status_code=400, content={"detail": "Invalid signature"})
+    else:
+        import json
+        event = json.loads(payload)
+
+    event_type = event.get("type", "")
+    data = event.get("data", {}).get("object", {})
+
+    if event_type == "checkout.session.completed":
+        clerk_user_id = data.get("client_reference_id")
+        customer_id = data.get("customer")
+        tier = data.get("metadata", {}).get("tier", "pro")
+        print(f"Checkout completed: user={clerk_user_id}, customer={customer_id}, tier={tier}")
+        # TODO: Store customer_id -> clerk_user_id mapping in DB
+
+    elif event_type == "customer.subscription.updated":
+        status = data.get("status")
+        customer_id = data.get("customer")
+        print(f"Subscription updated: customer={customer_id}, status={status}")
+
+    elif event_type == "customer.subscription.deleted":
+        customer_id = data.get("customer")
+        print(f"Subscription cancelled: customer={customer_id}")
+        # TODO: Downgrade user to free plan
+
+    return {"received": True}

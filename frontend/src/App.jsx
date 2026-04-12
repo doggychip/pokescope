@@ -1,5 +1,17 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import "./App.css";
+
+const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const isDevMode = !clerkKey || clerkKey === "pk_test_PLACEHOLDER";
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
+let useClerkUser, useClerkAuth;
+if (!isDevMode) {
+  const clerk = await import("@clerk/clerk-react");
+  useClerkUser = clerk.useUser;
+  useClerkAuth = clerk.useAuth;
+}
 
 const ERAS = ["All", "WOTC", "Gold Star", "e-Series", "Promo", "Modern", "Classic"];
 const LANGS = ["All", "EN", "JP"];
@@ -137,6 +149,45 @@ function DetailPanel({ card }) {
   );
 }
 
+function UserMenu() {
+  const navigate = useNavigate();
+
+  if (isDevMode) {
+    return (
+      <div className="user-menu">
+        <span className="user-plan-badge free">FREE</span>
+        <button className="btn-upgrade" onClick={() => navigate("/#pricing")}>Upgrade</button>
+      </div>
+    );
+  }
+
+  const { user } = useClerkUser();
+  const { signOut } = useClerkAuth();
+
+  const handleUpgrade = async (tier = "pro") => {
+    try {
+      const res = await fetch(`${API_BASE}/api/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } catch (e) {
+      console.error("Checkout failed:", e);
+    }
+  };
+
+  return (
+    <div className="user-menu">
+      <span className="user-plan-badge free">FREE</span>
+      <button className="btn-upgrade" onClick={() => handleUpgrade("pro")}>Upgrade to Pro</button>
+      <span className="user-name">{user?.firstName || user?.emailAddresses?.[0]?.emailAddress || "User"}</span>
+      <button className="btn-signout" onClick={() => signOut(() => navigate("/"))}>Sign Out</button>
+    </div>
+  );
+}
+
 export default function App() {
   const [cards, setCards] = useState([]);
   const [stats, setStats] = useState({ undervalued: 0, overvalued: 0, bubble_risk: 0, avg_return: 0 });
@@ -155,7 +206,7 @@ export default function App() {
     if (search.trim()) params.set("q", search.trim());
 
     try {
-      const res = await fetch(`/api/cards/market?${params}`);
+      const res = await fetch(`${API_BASE}/api/cards/market?${params}`);
       const data = await res.json();
       setCards(data.cards || []);
     } catch (e) {
@@ -169,17 +220,17 @@ export default function App() {
   }, [fetchCards]);
 
   useEffect(() => {
-    fetch("/api/cards/stats")
+    fetch(`${API_BASE}/api/cards/stats`)
       .then(r => r.json())
       .then(setStats)
       .catch(console.error);
   }, []);
 
   const statItems = [
-    { label: "UNDERVALUED", value: stats.undervalued, color: "#22c55e", suffix: " cards" },
-    { label: "OVERVALUED", value: stats.overvalued, color: "#ef4444", suffix: " cards" },
-    { label: "BUBBLE RISK", value: stats.bubble_risk, color: "#f59e0b", suffix: " cards" },
-    { label: "AVG 12M RETURN", value: `${(stats.avg_return * 100).toFixed(0)}%`, color: stats.avg_return > 0 ? "#22c55e" : "#ef4444", suffix: "" },
+    { label: "UNDERVALUED", value: stats.undervalued, color: "#22c55e", suffix: " cards", sortKey: "undervalued" },
+    { label: "OVERVALUED", value: stats.overvalued, color: "#ef4444", suffix: " cards", sortKey: "overvalued" },
+    { label: "BUBBLE RISK", value: stats.bubble_risk, color: "#f59e0b", suffix: " cards", sortKey: "bubble" },
+    { label: "AVG 12M RETURN", value: `${(stats.avg_return * 100).toFixed(0)}%`, color: stats.avg_return > 0 ? "#22c55e" : "#ef4444", suffix: "", sortKey: "appreciation" },
   ];
 
   return (
@@ -194,9 +245,12 @@ export default function App() {
               <p>PTCG MARKET INTELLIGENCE</p>
             </div>
           </div>
-          <div className="header-status">
-            <span className="status-dot" />
-            LIVE &middot; {cards.length} cards tracked &middot; Apr 2026
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div className="header-status">
+              <span className="status-dot" />
+              LIVE &middot; {cards.length} cards tracked
+            </div>
+            <UserMenu />
           </div>
         </div>
       </div>
@@ -204,7 +258,7 @@ export default function App() {
       {/* Stats Bar */}
       <div className="stats-bar">
         {statItems.map((s, i) => (
-          <div key={i} className="stat-item">
+          <div key={i} className={`stat-item ${sortBy === s.sortKey ? "active" : ""}`} onClick={() => setSortBy(s.sortKey)}>
             <div className="stat-label">{s.label}</div>
             <div className="stat-value" style={{ color: s.color }}>
               {s.value}{s.suffix}

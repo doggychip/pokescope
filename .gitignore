@@ -16,5 +16,9 @@ scripts/seed_data_*.json
 # Logs
 *.log
 
+# Env (secrets)
+.env
+frontend/.env
+
 # OS
 .DS_Store
