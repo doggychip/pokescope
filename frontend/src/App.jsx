@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation, LANGS, langPrefix } from "./i18n/index.jsx";
 import "./App.css";
 
 const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -14,39 +15,42 @@ if (!isDevMode) {
 }
 
 const ERAS = ["All", "WOTC", "Gold Star", "e-Series", "Promo", "Modern", "Classic"];
-const LANGS = ["All", "EN", "JP"];
-const SORT_OPTIONS = [
-  { key: "bubble", label: "Bubble Risk" },
-  { key: "undervalued", label: "Most Undervalued" },
-  { key: "overvalued", label: "Most Overvalued" },
-  { key: "social", label: "Social Buzz" },
-  { key: "appreciation", label: "12m Return" },
-  { key: "scarcity", label: "Scarcity" },
-  { key: "price", label: "Price" },
-];
+const CARD_LANGS = ["All", "EN", "JP"];
 
-function getValuation(card) {
+function getSortOptions(t) {
+  return [
+    { key: "bubble", label: t("dashboard.sortBubble") },
+    { key: "undervalued", label: t("dashboard.sortUndervalued") },
+    { key: "overvalued", label: t("dashboard.sortOvervalued") },
+    { key: "social", label: t("dashboard.sortSocial") },
+    { key: "appreciation", label: t("dashboard.sortAppreciation") },
+    { key: "scarcity", label: t("dashboard.sortScarcity") },
+    { key: "price", label: t("dashboard.sortPrice") },
+  ];
+}
+
+function getValuation(card, t) {
   if (!card.price || !card.fair_value) return { label: "N/A", color: "#6b7280", bg: "rgba(107,114,128,0.1)" };
   const diff = (card.price - card.fair_value) / card.fair_value;
-  if (diff > 0.15) return { label: "OVERVALUED", color: "#ef4444", bg: "rgba(239,68,68,0.1)" };
-  if (diff < -0.15) return { label: "UNDERVALUED", color: "#22c55e", bg: "rgba(34,197,94,0.1)" };
-  return { label: "FAIR", color: "#f59e0b", bg: "rgba(245,158,11,0.1)" };
+  if (diff > 0.15) return { label: t("dashboard.signalOvervalued"), color: "#ef4444", bg: "rgba(239,68,68,0.1)" };
+  if (diff < -0.15) return { label: t("dashboard.signalUndervalued"), color: "#22c55e", bg: "rgba(34,197,94,0.1)" };
+  return { label: t("dashboard.signalFair"), color: "#f59e0b", bg: "rgba(245,158,11,0.1)" };
 }
 
-function getBubbleRisk(val) {
+function getBubbleRisk(val, t) {
   if (val == null) return { label: "N/A", color: "#6b7280", icon: "\u26aa" };
-  if (val > 0.3) return { label: "HIGH", color: "#ef4444", icon: "\ud83d\udd34" };
-  if (val > 0.1) return { label: "MODERATE", color: "#f59e0b", icon: "\ud83d\udfe1" };
-  return { label: "LOW", color: "#22c55e", icon: "\ud83d\udfe2" };
+  if (val > 0.3) return { label: t("dashboard.bubbleHigh"), color: "#ef4444", icon: "\ud83d\udd34" };
+  if (val > 0.1) return { label: t("dashboard.bubbleModerate"), color: "#f59e0b", icon: "\ud83d\udfe1" };
+  return { label: t("dashboard.bubbleLow"), color: "#22c55e", icon: "\ud83d\udfe2" };
 }
 
-function getScarcity(pop) {
+function getScarcity(pop, t) {
   if (pop == null) return { label: "N/A", color: "#6b7280" };
-  if (pop <= 50) return { label: "ULTRA RARE", color: "#a855f7" };
-  if (pop <= 100) return { label: "VERY SCARCE", color: "#6366f1" };
-  if (pop <= 300) return { label: "SCARCE", color: "#3b82f6" };
-  if (pop <= 600) return { label: "MODERATE", color: "#f59e0b" };
-  return { label: "COMMON", color: "#6b7280" };
+  if (pop <= 50) return { label: t("dashboard.scarcityUltraRare"), color: "#a855f7" };
+  if (pop <= 100) return { label: t("dashboard.scarcityVeryScarce"), color: "#6366f1" };
+  if (pop <= 300) return { label: t("dashboard.scarcityScarce"), color: "#3b82f6" };
+  if (pop <= 600) return { label: t("dashboard.scarcityModerate"), color: "#f59e0b" };
+  return { label: t("dashboard.scarcityCommon"), color: "#6b7280" };
 }
 
 function Badge({ label, color, bg }) {
@@ -95,21 +99,22 @@ function getAnalysis(card) {
 }
 
 function DetailPanel({ card }) {
-  const valuation = getValuation(card);
-  const bubble = getBubbleRisk(card.bubble);
-  const scarcity = getScarcity(card.psa10_pop);
+  const { t } = useTranslation();
+  const valuation = getValuation(card, t);
+  const bubble = getBubbleRisk(card.bubble, t);
+  const scarcity = getScarcity(card.psa10_pop, t);
   const ret12m = card.price_12mo ? ((card.price - card.price_12mo) / card.price_12mo * 100).toFixed(1) : "N/A";
   const ret6m = card.price_6mo ? ((card.price - card.price_6mo) / card.price_6mo * 100).toFixed(1) : "N/A";
   const valueDiff = card.fair_value ? ((card.price - card.fair_value) / card.fair_value * 100).toFixed(1) : "0";
   const pricePerPop = card.psa10_pop ? (card.price / card.psa10_pop).toFixed(0) : "N/A";
 
   const metrics = [
-    { label: "PSA 10 POP", value: card.psa10_pop?.toLocaleString() || "N/A", sub: scarcity.label, subColor: scarcity.color },
-    { label: "PSA 9 POP", value: card.psa9_pop?.toLocaleString() || "N/A", sub: card.psa10_pop && card.psa9_pop ? `${(card.psa10_pop / card.psa9_pop * 100).toFixed(1)}% upgrade rate` : "", subColor: "#6b7280" },
-    { label: "PRICE/POP RATIO", value: pricePerPop !== "N/A" ? `$${pricePerPop}` : "N/A", sub: Number(pricePerPop) > 100 ? "Strong value signal" : "Weak scarcity premium", subColor: Number(pricePerPop) > 100 ? "#22c55e" : "#f59e0b" },
-    { label: "12M RETURN", value: ret12m !== "N/A" ? `${Number(ret12m) >= 0 ? "+" : ""}${ret12m}%` : "N/A", sub: ret6m !== "N/A" ? `6m: ${Number(ret6m) >= 0 ? "+" : ""}${ret6m}%` : "", subColor: Number(ret12m) >= 0 ? "#22c55e" : "#ef4444", valueColor: Number(ret12m) >= 0 ? "#22c55e" : "#ef4444" },
-    { label: "SOCIAL SCORE", value: card.social_score != null ? `${card.social_score}/100` : "N/A", sub: card.social_score > 80 ? "High buzz" : card.social_score > 60 ? "Moderate buzz" : "Low buzz", subColor: card.social_score > 80 ? "#6366f1" : "#6b7280" },
-    { label: "BUBBLE RISK", value: `${bubble.icon} ${bubble.label}`, sub: card.bubble != null ? `Score: ${(card.bubble * 100).toFixed(0)}%` : "", subColor: bubble.color },
+    { label: t("detail.psa10pop"), value: card.psa10_pop?.toLocaleString() || "N/A", sub: scarcity.label, subColor: scarcity.color },
+    { label: t("detail.psa9pop"), value: card.psa9_pop?.toLocaleString() || "N/A", sub: card.psa10_pop && card.psa9_pop ? `${(card.psa10_pop / card.psa9_pop * 100).toFixed(1)}% ${t("detail.upgradeRate")}` : "", subColor: "#6b7280" },
+    { label: t("detail.pricePopRatio"), value: pricePerPop !== "N/A" ? `$${pricePerPop}` : "N/A", sub: Number(pricePerPop) > 100 ? t("detail.strongValue") : t("detail.weakScarcity"), subColor: Number(pricePerPop) > 100 ? "#22c55e" : "#f59e0b" },
+    { label: t("detail.return12m"), value: ret12m !== "N/A" ? `${Number(ret12m) >= 0 ? "+" : ""}${ret12m}%` : "N/A", sub: ret6m !== "N/A" ? `6m: ${Number(ret6m) >= 0 ? "+" : ""}${ret6m}%` : "", subColor: Number(ret12m) >= 0 ? "#22c55e" : "#ef4444", valueColor: Number(ret12m) >= 0 ? "#22c55e" : "#ef4444" },
+    { label: t("detail.socialScore"), value: card.social_score != null ? `${card.social_score}/100` : "N/A", sub: card.social_score > 80 ? t("detail.highBuzz") : card.social_score > 60 ? t("detail.moderateBuzz") : t("detail.lowBuzz"), subColor: card.social_score > 80 ? "#6366f1" : "#6b7280" },
+    { label: t("detail.bubbleRisk"), value: `${bubble.icon} ${bubble.label}`, sub: card.bubble != null ? `Score: ${(card.bubble * 100).toFixed(0)}%` : "", subColor: bubble.color },
   ];
 
   return (
@@ -126,7 +131,7 @@ function DetailPanel({ card }) {
         <div className="detail-price">
           <div className="price-value">${card.price?.toLocaleString() || "N/A"}</div>
           <div className="price-diff" style={{ color: Number(valueDiff) > 0 ? "#ef4444" : "#22c55e" }}>
-            {Number(valueDiff) > 0 ? "+" : ""}{valueDiff}% vs fair value (${card.fair_value?.toLocaleString() || "N/A"})
+            {Number(valueDiff) > 0 ? "+" : ""}{valueDiff}% {t("dashboard.vsFairValue")} (${card.fair_value?.toLocaleString() || "N/A"})
           </div>
         </div>
       </div>
@@ -142,7 +147,7 @@ function DetailPanel({ card }) {
       </div>
 
       <div className="ai-analysis">
-        <div className="ai-label">AI ANALYSIS</div>
+        <div className="ai-label">{t ? t("dashboard.aiAnalysis") : "AI ANALYSIS"}</div>
         <p>{getAnalysis(card)}</p>
       </div>
     </div>
@@ -189,6 +194,7 @@ function UserMenu() {
 }
 
 export default function App() {
+  const { t, lang } = useTranslation();
   const [cards, setCards] = useState([]);
   const [stats, setStats] = useState({ undervalued: 0, overvalued: 0, bubble_risk: 0, avg_return: 0 });
   const [sortBy, setSortBy] = useState("bubble");
@@ -246,11 +252,12 @@ export default function App() {
   }, []);
 
   const statItems = [
-    { label: "UNDERVALUED", value: stats.undervalued, color: "#22c55e", suffix: " cards", sortKey: "undervalued" },
-    { label: "OVERVALUED", value: stats.overvalued, color: "#ef4444", suffix: " cards", sortKey: "overvalued" },
-    { label: "BUBBLE RISK", value: stats.bubble_risk, color: "#f59e0b", suffix: " cards", sortKey: "bubble" },
-    { label: "AVG 12M RETURN", value: `${(stats.avg_return * 100).toFixed(0)}%`, color: stats.avg_return > 0 ? "#22c55e" : "#ef4444", suffix: "", sortKey: "appreciation" },
+    { label: t("dashboard.undervalued"), value: stats.undervalued, color: "#22c55e", suffix: ` ${t("dashboard.cards")}`, sortKey: "undervalued" },
+    { label: t("dashboard.overvalued"), value: stats.overvalued, color: "#ef4444", suffix: ` ${t("dashboard.cards")}`, sortKey: "overvalued" },
+    { label: t("dashboard.bubbleRisk"), value: stats.bubble_risk, color: "#f59e0b", suffix: ` ${t("dashboard.cards")}`, sortKey: "bubble" },
+    { label: t("dashboard.avg12mReturn"), value: `${(stats.avg_return * 100).toFixed(0)}%`, color: stats.avg_return > 0 ? "#22c55e" : "#ef4444", suffix: "", sortKey: "appreciation" },
   ];
+  const sortOptions = getSortOptions(t);
 
   return (
     <div>
@@ -261,13 +268,13 @@ export default function App() {
             <span style={{ fontSize: 22 }}>&#9889;</span>
             <div>
               <h1>POK&Eacute;SCOPE</h1>
-              <p>PTCG MARKET INTELLIGENCE</p>
+              <p>{t("dashboard.tagline")}</p>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <div className="header-status">
               <span className="status-dot" />
-              LIVE &middot; {cards.length} cards tracked
+              {t("dashboard.live")} &middot; {cards.length} {t("dashboard.cardsTracked")}
             </div>
             <UserMenu />
           </div>
@@ -291,7 +298,7 @@ export default function App() {
         <input
           type="text"
           className="search-input"
-          placeholder="Search cards..."
+          placeholder={t("dashboard.searchPlaceholder")}
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -303,35 +310,35 @@ export default function App() {
           ))}
         </div>
         <div className="filter-group">
-          {LANGS.map(l => (
+          {CARD_LANGS.map(l => (
             <button key={l} className={`filter-btn ${filterLang === l ? "active" : ""}`} onClick={() => setFilterLang(l)}>
               {l}
             </button>
           ))}
         </div>
         <select className="sort-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-          {SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+          {sortOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
       </div>
 
       {/* Table */}
       {loading ? (
-        <div className="loading">Loading market data...</div>
+        <div className="loading">{t("dashboard.loading")}</div>
       ) : (
         <div className="table-wrap">
           <table className="card-table">
             <thead>
               <tr>
-                {["CARD", "ERA", "GRADE", "PRICE", "FAIR VALUE", "SIGNAL", "PSA 10 POP", "SCARCITY", "12M TREND", "12M RETURN", "SOCIAL", "BUBBLE"].map(h => (
+                {[t("dashboard.colCard"), t("dashboard.colEra"), t("dashboard.colGrade"), t("dashboard.colPrice"), t("dashboard.colFairValue"), t("dashboard.colSignal"), t("dashboard.colPsa10"), t("dashboard.colScarcity"), t("dashboard.col12mTrend"), t("dashboard.col12mReturn"), t("dashboard.colSocial"), t("dashboard.colBubble")].map(h => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {cards.map(card => {
-                const valuation = getValuation(card);
-                const bubble = getBubbleRisk(card.bubble);
-                const scarcity = getScarcity(card.psa10_pop);
+                const valuation = getValuation(card, t);
+                const bubble = getBubbleRisk(card.bubble, t);
+                const scarcity = getScarcity(card.psa10_pop, t);
                 const ret12m = card.price_12mo ? ((card.price - card.price_12mo) / card.price_12mo * 100).toFixed(0) : null;
                 const prices = [card.price_12mo, card.price_6mo, card.price_6mo && card.price ? (card.price_6mo + card.price) / 2 : null, card.price];
                 const trendColor = card.price > (card.price_12mo || 0) ? "#22c55e" : "#ef4444";

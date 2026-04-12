@@ -1,110 +1,63 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation, LANGS, langPrefix } from "./i18n/index.jsx";
 import "./Landing.css";
 
 const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const isDevMode = !clerkKey || clerkKey === "pk_test_PLACEHOLDER";
 
-const FEATURES = [
-  {
-    icon: "\ud83d\udcc8",
-    title: "Real-Time Valuations",
-    desc: "Fair value estimates powered by market data across eBay, Fanatics Collect, and PriceCharting.",
-    free: true,
-  },
-  {
-    icon: "\ud83d\udea8",
-    title: "Bubble Risk Alerts",
-    desc: "Proprietary scoring that flags overheated cards before the correction hits.",
-    free: true,
-  },
-  {
-    icon: "\ud83d\udd0d",
-    title: "20,000+ Cards Tracked",
-    desc: "Every English-language TCG set from Base Set to Scarlet & Violet, plus curated Japanese grails.",
-    free: true,
-  },
-  {
-    icon: "\ud83c\udfaf",
-    title: "Scarcity Analysis",
-    desc: "PSA population data cross-referenced with price trends to find undervalued gems.",
-    free: false,
-  },
-  {
-    icon: "\ud83e\udd16",
-    title: "AI Card Analysis",
-    desc: "One-click deep dives on any card: valuation context, momentum signals, and buy/sell guidance.",
-    free: false,
-  },
-  {
-    icon: "\ud83d\udcca",
-    title: "Portfolio Tracker",
-    desc: "Track your collection's value over time with automated price updates and P&L reporting.",
-    free: false,
-  },
+const FEATURE_KEYS = [
+  { icon: "\ud83d\udcc8", titleKey: "realTimeValuations", descKey: "realTimeValuationsDesc", free: true },
+  { icon: "\ud83d\udea8", titleKey: "bubbleRiskAlerts", descKey: "bubbleRiskAlertsDesc", free: true },
+  { icon: "\ud83d\udd0d", titleKey: "cardsTracked", descKey: "cardsTrackedDesc", free: true },
+  { icon: "\ud83c\udfaf", titleKey: "scarcityAnalysis", descKey: "scarcityAnalysisDesc", free: false },
+  { icon: "\ud83e\udd16", titleKey: "aiAnalysis", descKey: "aiAnalysisDesc", free: false },
+  { icon: "\ud83d\udcca", titleKey: "portfolioTracker", descKey: "portfolioTrackerDesc", free: false },
 ];
 
-const TIERS = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "forever",
-    cta: "Get Started Free",
-    highlight: false,
-    features: [
-      "20,000+ card database",
-      "Basic search & filters",
-      "Market overview stats",
-      "Top 200 cards by sort",
-      "Community access",
-    ],
-    limits: [
-      "No AI analysis",
-      "No portfolio tracking",
-      "No export",
-    ],
-  },
-  {
-    name: "Pro",
-    tier: "pro",
-    price: "$12",
-    period: "/month",
-    cta: "Start 14-Day Free Trial",
-    highlight: true,
-    features: [
-      "Everything in Free",
-      "Unlimited card views",
-      "AI analysis on every card",
-      "Scarcity deep dives",
-      "Portfolio tracker",
-      "Price alerts & watchlists",
-      "CSV/API export",
-      "Priority support",
-    ],
-    limits: [],
-  },
-  {
-    name: "Dealer",
-    tier: "dealer",
-    price: "$49",
-    period: "/month",
-    cta: "Contact Sales",
-    highlight: false,
-    features: [
-      "Everything in Pro",
-      "Bulk valuation tools",
-      "Inventory management",
-      "Market API access",
-      "Custom reports",
-      "Multi-user accounts",
-      "Dedicated account manager",
-      "White-label options",
-    ],
-    limits: [],
-  },
-];
+function LangSwitcher() {
+  const navigate = useNavigate();
+  const { lang } = useTranslation();
+
+  return (
+    <div className="lang-switcher">
+      {LANGS.map(l => (
+        <button
+          key={l.code}
+          className={`lang-btn ${lang === l.code ? "active" : ""}`}
+          onClick={() => navigate(l.code === "en" ? "/" : `/${l.code}`)}
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { t, lang } = useTranslation();
+  const prefix = langPrefix(lang);
+  const dashPath = `${prefix}/dashboard`;
+  const signInPath = isDevMode ? dashPath : "/sign-in";
+  const signUpPath = isDevMode ? dashPath : "/sign-up";
+
+  const tiers = [
+    {
+      name: t("pricing.free"), price: "$0", period: t("pricing.forever"),
+      cta: t("pricing.getStartedFree"), highlight: false, tier: null,
+      features: t("pricing.freeFeatures"), limits: t("pricing.freeLimits"),
+    },
+    {
+      name: t("pricing.proName"), price: "$12", period: t("pricing.perMonth"),
+      cta: t("pricing.startTrial"), highlight: true, tier: "pro",
+      features: t("pricing.proFeatures"), limits: [],
+    },
+    {
+      name: t("pricing.dealer"), price: "$49", period: t("pricing.perMonth"),
+      cta: t("pricing.contactSales"), highlight: false, tier: "dealer",
+      features: t("pricing.dealerFeatures"), limits: [],
+    },
+  ];
 
   return (
     <div className="landing">
@@ -115,41 +68,39 @@ export default function Landing() {
           <span className="nav-name">POK&Eacute;SCOPE</span>
         </div>
         <div className="nav-links">
-          <a href="#features">Features</a>
-          <a href="#pricing">Pricing</a>
-          <button className="nav-cta" onClick={() => navigate(isDevMode ? "/dashboard" : "/sign-in")}>Sign In</button>
+          <a href="#features">{t("nav.features")}</a>
+          <a href="#pricing">{t("nav.pricing")}</a>
+          <LangSwitcher />
+          <button className="nav-cta" onClick={() => navigate(signInPath)}>{t("nav.signIn")}</button>
         </div>
       </nav>
 
       {/* Hero */}
       <section className="hero">
-        <div className="hero-badge">PTCG MARKET INTELLIGENCE</div>
+        <div className="hero-badge">{t("hero.badge")}</div>
         <h1>
-          Stop guessing.<br />
-          <span className="hero-accent">Start knowing.</span>
+          {t("hero.title1")}<br />
+          <span className="hero-accent">{t("hero.title2")}</span>
         </h1>
-        <p className="hero-sub">
-          Real-time valuations, bubble risk alerts, and AI-powered analysis for 20,000+ Pok&eacute;mon cards.
-          Make smarter collecting and investing decisions.
-        </p>
+        <p className="hero-sub">{t("hero.subtitle")}</p>
         <div className="hero-actions">
-          <button className="btn-primary" onClick={() => navigate(isDevMode ? "/dashboard" : "/sign-up")}>
-            Get Started Free
+          <button className="btn-primary" onClick={() => navigate(signUpPath)}>
+            {t("hero.cta")}
           </button>
           <button className="btn-secondary" onClick={() => document.getElementById("features").scrollIntoView({ behavior: "smooth" })}>
-            See How It Works
+            {t("hero.ctaSecondary")}
           </button>
         </div>
-        <p className="hero-note">No credit card required &middot; Free forever &middot; 20,000+ cards</p>
+        <p className="hero-note">{t("hero.note")}</p>
       </section>
 
       {/* Stats strip */}
       <section className="stats-strip">
         {[
-          { value: "20,245", label: "Cards Tracked" },
-          { value: "500+", label: "Sets Covered" },
-          { value: "Real-Time", label: "Price Updates" },
-          { value: "97.5%", label: "Market Coverage" },
+          { value: "20,245", label: t("stats.cardsTracked") },
+          { value: "500+", label: t("stats.setsCovered") },
+          { value: t("stats.realTime"), label: t("stats.priceUpdates") },
+          { value: "97.5%", label: t("stats.marketCoverage") },
         ].map((s, i) => (
           <div key={i} className="stats-strip-item">
             <div className="stats-strip-value">{s.value}</div>
@@ -162,23 +113,21 @@ export default function Landing() {
       <section className="preview">
         <div className="preview-window">
           <div className="preview-bar">
-            <div className="preview-dots">
-              <span /><span /><span />
-            </div>
-            <div className="preview-url">localhost:3000/dashboard</div>
+            <div className="preview-dots"><span /><span /><span /></div>
+            <div className="preview-url">pokescope.zeabur.app/dashboard</div>
           </div>
           <div className="preview-body">
             <div className="preview-table">
               <div className="preview-row preview-header-row">
-                {["Card", "Price", "Fair Value", "Signal", "Bubble"].map(h => (
+                {[t("dashboard.colCard"), t("dashboard.colPrice"), t("dashboard.colFairValue"), t("dashboard.colSignal"), t("dashboard.colBubble")].map(h => (
                   <div key={h} className="preview-cell">{h}</div>
                 ))}
               </div>
               {[
-                { name: "Charizard Gold Star \u03b4", price: "$10,500", fair: "$11,000", signal: "FAIR", signalColor: "#f59e0b", bubble: "LOW", bubbleIcon: "\ud83d\udfe2" },
-                { name: "Crystal Lugia", price: "$8,000", fair: "$10,500", signal: "UNDERVALUED", signalColor: "#22c55e", bubble: "LOW", bubbleIcon: "\ud83d\udfe2" },
-                { name: "Luigi Pikachu Full Art", price: "$17,000", fair: "$12,000", signal: "OVERVALUED", signalColor: "#ef4444", bubble: "HIGH", bubbleIcon: "\ud83d\udd34" },
-                { name: "Umbreon VMAX Alt Art", price: "$3,500", fair: "$4,200", signal: "UNDERVALUED", signalColor: "#22c55e", bubble: "LOW", bubbleIcon: "\ud83d\udfe2" },
+                { name: "Charizard Gold Star \u03b4", price: "$10,500", fair: "$11,000", signal: t("dashboard.signalFair"), signalColor: "#f59e0b", bubble: t("dashboard.bubbleLow"), bubbleIcon: "\ud83d\udfe2" },
+                { name: "Crystal Lugia", price: "$8,000", fair: "$10,500", signal: t("dashboard.signalUndervalued"), signalColor: "#22c55e", bubble: t("dashboard.bubbleLow"), bubbleIcon: "\ud83d\udfe2" },
+                { name: "Luigi Pikachu Full Art", price: "$17,000", fair: "$12,000", signal: t("dashboard.signalOvervalued"), signalColor: "#ef4444", bubble: t("dashboard.bubbleHigh"), bubbleIcon: "\ud83d\udd34" },
+                { name: "Umbreon VMAX Alt Art", price: "$3,500", fair: "$4,200", signal: t("dashboard.signalUndervalued"), signalColor: "#22c55e", bubble: t("dashboard.bubbleLow"), bubbleIcon: "\ud83d\udfe2" },
               ].map((r, i) => (
                 <div key={i} className="preview-row">
                   <div className="preview-cell preview-name">{r.name}</div>
@@ -195,16 +144,16 @@ export default function Landing() {
 
       {/* Features */}
       <section className="features" id="features">
-        <h2>Everything you need to collect smarter</h2>
-        <p className="section-sub">From casual collectors to full-time dealers, PokéScope gives you the edge.</p>
+        <h2>{t("features.title")}</h2>
+        <p className="section-sub">{t("features.subtitle")}</p>
         <div className="features-grid">
-          {FEATURES.map((f, i) => (
+          {FEATURE_KEYS.map((f, i) => (
             <div key={i} className="feature-card">
               <div className="feature-icon">{f.icon}</div>
-              <h3>{f.title}</h3>
-              <p>{f.desc}</p>
+              <h3>{t(`features.${f.titleKey}`)}</h3>
+              <p>{t(`features.${f.descKey}`)}</p>
               <span className={`feature-tier ${f.free ? "tier-free" : "tier-pro"}`}>
-                {f.free ? "Free" : "Pro"}
+                {f.free ? t("features.free") : t("features.pro")}
               </span>
             </div>
           ))}
@@ -213,12 +162,12 @@ export default function Landing() {
 
       {/* Pricing */}
       <section className="pricing" id="pricing">
-        <h2>Simple, transparent pricing</h2>
-        <p className="section-sub">Start free. Upgrade when you need more.</p>
+        <h2>{t("pricing.title")}</h2>
+        <p className="section-sub">{t("pricing.subtitle")}</p>
         <div className="pricing-grid">
-          {TIERS.map((tier, i) => (
+          {tiers.map((tier, i) => (
             <div key={i} className={`pricing-card ${tier.highlight ? "pricing-highlight" : ""}`}>
-              {tier.highlight && <div className="pricing-popular">MOST POPULAR</div>}
+              {tier.highlight && <div className="pricing-popular">{t("pricing.mostPopular")}</div>}
               <h3>{tier.name}</h3>
               <div className="pricing-price">
                 <span className="pricing-amount">{tier.price}</span>
@@ -228,19 +177,19 @@ export default function Landing() {
                 className={tier.highlight ? "btn-primary" : "btn-secondary"}
                 onClick={() => {
                   if (tier.tier) {
-                    navigate(isDevMode ? `/dashboard?upgrade=${tier.tier}` : `/sign-up?redirect_url=/dashboard?upgrade=${tier.tier}`);
+                    navigate(isDevMode ? `${dashPath}?upgrade=${tier.tier}` : `/sign-up?redirect_url=${dashPath}?upgrade=${tier.tier}`);
                   } else {
-                    navigate(isDevMode ? "/dashboard" : "/sign-up");
+                    navigate(signUpPath);
                   }
                 }}
               >
                 {tier.cta}
               </button>
               <ul className="pricing-features">
-                {tier.features.map((f, j) => (
+                {(tier.features || []).map((f, j) => (
                   <li key={j} className="pricing-yes">{f}</li>
                 ))}
-                {tier.limits.map((f, j) => (
+                {(tier.limits || []).map((f, j) => (
                   <li key={`n${j}`} className="pricing-no">{f}</li>
                 ))}
               </ul>
@@ -251,10 +200,10 @@ export default function Landing() {
 
       {/* CTA */}
       <section className="final-cta">
-        <h2>Ready to see what your cards are really worth?</h2>
-        <p>Join thousands of collectors using PokéScope to make smarter decisions.</p>
-        <button className="btn-primary btn-lg" onClick={() => navigate(isDevMode ? "/dashboard" : "/sign-up")}>
-          Get Started Free
+        <h2>{t("cta.title")}</h2>
+        <p>{t("cta.subtitle")}</p>
+        <button className="btn-primary btn-lg" onClick={() => navigate(signUpPath)}>
+          {t("cta.button")}
         </button>
       </section>
 
@@ -263,7 +212,7 @@ export default function Landing() {
         <div className="footer-brand">
           <span>&#9889;</span> POK&Eacute;SCOPE
         </div>
-        <p>&copy; 2026 PokéScope. Not financial advice. Built for collectors, by collectors.</p>
+        <p>{t("footer")}</p>
       </footer>
     </div>
   );
