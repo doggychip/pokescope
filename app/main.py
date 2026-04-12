@@ -306,7 +306,7 @@ async def stripe_webhook(request: Request):
 
 # --- Seed Endpoint (for populating remote database) ---
 
-@app.post("/api/admin/seed")
+@app.api_route("/api/admin/seed", methods=["GET", "POST"])
 async def seed_database(request: Request):
     """Fetch cards from PokémonTCG API and seed into database. Admin only."""
     import subprocess
