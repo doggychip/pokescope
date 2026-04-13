@@ -12,6 +12,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost/pokescope")
 pool: Optional[AsyncConnectionPool] = None
 
 SCHEMA_SQL = """
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE TABLE IF NOT EXISTS cards (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
@@ -59,6 +61,19 @@ CREATE TRIGGER trg_cards_search_vec
 
 CREATE INDEX IF NOT EXISTS idx_cards_search ON cards USING GIN (search_vec);
 CREATE INDEX IF NOT EXISTS idx_cards_name   ON cards (lower(name));
+CREATE INDEX IF NOT EXISTS idx_cards_name_trgm ON cards USING GIN (name gin_trgm_ops);
+
+-- Community votes table
+CREATE TABLE IF NOT EXISTS card_votes (
+    id          SERIAL PRIMARY KEY,
+    card_id     TEXT NOT NULL REFERENCES cards(id),
+    user_id     TEXT NOT NULL,
+    vote        SMALLINT NOT NULL CHECK (vote IN (-1, 1)),  -- -1 bearish, 1 bullish
+    created_at  TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(card_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_card_votes_card ON card_votes(card_id);
 """
 
 

@@ -88,22 +88,43 @@ async def search_cards(
     tsquery = " & ".join(q.split())
 
     async with get_conn() as conn:
+        # Try full-text search first
         row = await conn.execute(
             "SELECT count(*) FROM cards WHERE search_vec @@ to_tsquery('english', %s)",
             (tsquery,),
         )
         total = (await row.fetchone())[0]
 
-        rows = await conn.execute(
-            f"""
-            SELECT {CARD_COLUMNS}
-            FROM cards
-            WHERE search_vec @@ to_tsquery('english', %s)
-            ORDER BY ts_rank(search_vec, to_tsquery('english', %s)) DESC
-            LIMIT %s OFFSET %s
-            """,
-            (tsquery, tsquery, limit, offset),
-        )
+        if total > 0:
+            rows = await conn.execute(
+                f"""
+                SELECT {CARD_COLUMNS}
+                FROM cards
+                WHERE search_vec @@ to_tsquery('english', %s)
+                ORDER BY ts_rank(search_vec, to_tsquery('english', %s)) DESC
+                LIMIT %s OFFSET %s
+                """,
+                (tsquery, tsquery, limit, offset),
+            )
+        else:
+            # Fallback to fuzzy trigram search
+            row = await conn.execute(
+                "SELECT count(*) FROM cards WHERE name ILIKE %s OR name %% %s",
+                (f"%{q}%", q),
+            )
+            total = (await row.fetchone())[0]
+
+            rows = await conn.execute(
+                f"""
+                SELECT {CARD_COLUMNS}
+                FROM cards
+                WHERE name ILIKE %s OR name %% %s
+                ORDER BY similarity(name, %s) DESC
+                LIMIT %s OFFSET %s
+                """,
+                (f"%{q}%", q, q, limit, offset),
+            )
+
         cards = [row_to_card(r) for r in await rows.fetchall()]
 
     return SearchResult(query=q, total=total, cards=cards)
@@ -114,6 +135,7 @@ async def market_cards(
     sort: str = Query("bubble", description="Sort field"),
     era: Optional[str] = Query(None),
     lang: Optional[str] = Query(None),
+    holo: Optional[str] = Query(None, description="holo, nonholo, or omit for all"),
     q: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -128,9 +150,14 @@ async def market_cards(
     if lang:
         conditions.append("lang = %s")
         params.append(lang)
+    if holo == "holo":
+        conditions.append("rarity ILIKE '%Holo%'")
+    elif holo == "nonholo":
+        conditions.append("(rarity NOT ILIKE '%Holo%' OR rarity IS NULL)")
     if q:
-        conditions.append("search_vec @@ to_tsquery('english', %s)")
+        conditions.append("(search_vec @@ to_tsquery('english', %s) OR name ILIKE %s)")
         params.append(" & ".join(q.split()))
+        params.append(f"%{q}%")
 
     where = " AND ".join(conditions)
 
@@ -163,6 +190,57 @@ async def market_cards(
         cards = [row_to_card(r) for r in await rows.fetchall()]
 
     return {"total": total, "cards": cards}
+
+
+@app.get("/api/cards/{card_id}/votes")
+async def get_card_votes(card_id: str):
+    """Get community sentiment for a card."""
+    async with get_conn() as conn:
+        row = await conn.execute(
+            """SELECT
+                count(*) FILTER (WHERE vote = 1) AS bullish,
+                count(*) FILTER (WHERE vote = -1) AS bearish,
+                count(*) AS total
+            FROM card_votes WHERE card_id = %s""",
+            (card_id,),
+        )
+        r = (await row.fetchone())
+        bullish, bearish, total = r[0], r[1], r[2]
+        sentiment = round(bullish / total * 100) if total > 0 else 50
+        return {"card_id": card_id, "bullish": bullish, "bearish": bearish, "total": total, "sentiment": sentiment}
+
+
+@app.post("/api/cards/{card_id}/vote")
+async def vote_card(card_id: str, request: Request):
+    """Vote bullish (+1) or bearish (-1) on a card. Requires auth."""
+    claims = await verify_clerk_token(request)
+    user_id = claims.get("sub", "anonymous") if claims else "anonymous"
+
+    body = await request.json()
+    vote = body.get("vote")
+    if vote not in (1, -1):
+        return JSONResponse(status_code=400, content={"detail": "vote must be 1 (bullish) or -1 (bearish)"})
+
+    async with get_conn() as conn:
+        await conn.execute(
+            """INSERT INTO card_votes (card_id, user_id, vote)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (card_id, user_id) DO UPDATE SET vote = EXCLUDED.vote, created_at = now()""",
+            (card_id, user_id, vote),
+        )
+        # Return updated sentiment
+        row = await conn.execute(
+            """SELECT
+                count(*) FILTER (WHERE vote = 1) AS bullish,
+                count(*) FILTER (WHERE vote = -1) AS bearish,
+                count(*) AS total
+            FROM card_votes WHERE card_id = %s""",
+            (card_id,),
+        )
+        r = (await row.fetchone())
+        bullish, bearish, total = r[0], r[1], r[2]
+        sentiment = round(bullish / total * 100) if total > 0 else 50
+        return {"card_id": card_id, "bullish": bullish, "bearish": bearish, "total": total, "sentiment": sentiment, "your_vote": vote}
 
 
 @app.get("/api/cards/stats")

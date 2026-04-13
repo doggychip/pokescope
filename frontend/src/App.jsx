@@ -97,6 +97,60 @@ function getAnalysis(card) {
   return `${card.name} is trading near fair value. ${pop < 100 ? `With only ${pop} PSA 10 copies, long-term scarcity dynamics are favorable.` : "Population is moderate \u2014 focus on grade quality and presentation."} ${Number(ret12m) > 30 ? "Strong recent momentum suggests continued collector interest." : "Steady appreciation with moderate volatility."}`;
 }
 
+function CommunityVote({ cardId }) {
+  const [votes, setVotes] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/cards/${cardId}/votes`)
+      .then(r => r.json())
+      .then(setVotes)
+      .catch(() => {});
+  }, [cardId]);
+
+  const handleVote = async (vote) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/cards/${cardId}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vote }),
+      });
+      const data = await res.json();
+      setVotes(data);
+    } catch (e) {
+      console.error("Vote failed:", e);
+    }
+  };
+
+  const sentiment = votes?.sentiment ?? 50;
+  const total = votes?.total ?? 0;
+
+  return (
+    <div className="community-vote">
+      <div className="vote-header">
+        <span className="vote-label">COMMUNITY SENTIMENT</span>
+        <span className="vote-count">{total} vote{total !== 1 ? "s" : ""}</span>
+      </div>
+      <div className="vote-bar-wrap">
+        <div className="vote-bar">
+          <div className="vote-bar-bull" style={{ width: `${sentiment}%` }} />
+        </div>
+        <div className="vote-bar-labels">
+          <span style={{ color: "#22c55e" }}>{sentiment}% Bullish</span>
+          <span style={{ color: "#ef4444" }}>{100 - sentiment}% Bearish</span>
+        </div>
+      </div>
+      <div className="vote-buttons">
+        <button className="vote-btn vote-bull" onClick={() => handleVote(1)}>
+          &#9650; Bullish
+        </button>
+        <button className="vote-btn vote-bear" onClick={() => handleVote(-1)}>
+          &#9660; Bearish
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DetailPanel({ card }) {
   const { t } = useTranslation();
   const valuation = getValuation(card, t);
@@ -149,6 +203,8 @@ function DetailPanel({ card }) {
         <div className="ai-label">{t("dashboard.aiAnalysis")}</div>
         <p>{getAnalysis(card)}</p>
       </div>
+
+      <CommunityVote cardId={card.id} />
     </div>
   );
 }
@@ -205,6 +261,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState("bubble");
   const [filterEra, setFilterEra] = useState("All");
   const [filterLang, setFilterLang] = useState("All");
+  const [filterHolo, setFilterHolo] = useState("All");
   const [search, setSearch] = useState("");
   const [selectedCard, setSelectedCard] = useState(null);
   const [modalImg, setModalImg] = useState(null);
@@ -233,6 +290,7 @@ export default function App() {
     const params = new URLSearchParams({ sort: sortBy, limit: "200" });
     if (filterEra !== "All") params.set("era", filterEra);
     if (filterLang !== "All") params.set("lang", filterLang);
+    if (filterHolo !== "All") params.set("holo", filterHolo);
     if (search.trim()) params.set("q", search.trim());
 
     try {
@@ -243,7 +301,7 @@ export default function App() {
       console.error("Failed to fetch cards:", e);
     }
     setLoading(false);
-  }, [sortBy, filterEra, filterLang, search]);
+  }, [sortBy, filterEra, filterLang, filterHolo, search]);
 
   useEffect(() => {
     fetchCards();
@@ -318,6 +376,13 @@ export default function App() {
           {CARD_LANGS.map(l => (
             <button key={l} className={`filter-btn ${filterLang === l ? "active" : ""}`} onClick={() => setFilterLang(l)}>
               {l}
+            </button>
+          ))}
+        </div>
+        <div className="filter-group">
+          {[["All", "All"], ["holo", "Holo"], ["nonholo", "Non-Holo"]].map(([val, label]) => (
+            <button key={val} className={`filter-btn ${filterHolo === val ? "active" : ""}`} onClick={() => setFilterHolo(val)}>
+              {label}
             </button>
           ))}
         </div>
