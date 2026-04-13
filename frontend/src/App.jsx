@@ -88,14 +88,15 @@ function Sparkline({ prices, color }) {
 function getAnalysis(card) {
   const valueDiff = card.fair_value ? ((card.price - card.fair_value) / card.fair_value * 100).toFixed(1) : 0;
   const ret12m = card.price_12mo ? ((card.price - card.price_12mo) / card.price_12mo * 100).toFixed(1) : 0;
+  const pop = card.psa10_pop || 0;
 
   if (Number(valueDiff) < -15) {
-    return `${card.name} appears undervalued by ${Math.abs(Number(valueDiff))}% relative to fair market value. With a PSA 10 population of only ${card.psa10_pop} and a ${ret12m}% 12-month return, the scarcity-to-price ratio suggests significant upside potential. ${card.social_score > 75 ? "Strong social media interest supports continued demand." : "Social engagement is currently low \u2014 watch for catalysts."}`;
+    return `${card.name} appears undervalued by ${Math.abs(Number(valueDiff))}% relative to fair market value. With a PSA 10 population of only ${pop.toLocaleString()} and a ${ret12m}% 12-month return, the scarcity-to-price ratio suggests significant upside potential. ${(card.social_score || 0) > 75 ? "Strong social media interest supports continued demand." : "Social engagement is currently low \u2014 watch for catalysts."}`;
   }
   if (Number(valueDiff) > 15) {
-    return `${card.name} is trading ${valueDiff}% above estimated fair value. ${card.psa10_pop > 500 ? `The high PSA 10 population of ${card.psa10_pop.toLocaleString()} limits scarcity premium.` : "Scarcity supports some premium, but current pricing appears stretched."} ${card.bubble > 0.2 ? "Bubble risk is elevated \u2014 consider waiting for a correction before entering." : "Monitor for stabilization before adding."}`;
+    return `${card.name} is trading ${valueDiff}% above estimated fair value. ${pop > 500 ? `The high PSA 10 population of ${pop.toLocaleString()} limits scarcity premium.` : "Scarcity supports some premium, but current pricing appears stretched."} ${(card.bubble || 0) > 0.2 ? "Bubble risk is elevated \u2014 consider waiting for a correction before entering." : "Monitor for stabilization before adding."}`;
   }
-  return `${card.name} is trading near fair value. ${card.psa10_pop < 100 ? `With only ${card.psa10_pop} PSA 10 copies, long-term scarcity dynamics are favorable.` : "Population is moderate \u2014 focus on grade quality and presentation."} ${Number(ret12m) > 30 ? "Strong recent momentum suggests continued collector interest." : "Steady appreciation with moderate volatility."}`;
+  return `${card.name} is trading near fair value. ${pop < 100 ? `With only ${pop} PSA 10 copies, long-term scarcity dynamics are favorable.` : "Population is moderate \u2014 focus on grade quality and presentation."} ${Number(ret12m) > 30 ? "Strong recent momentum suggests continued collector interest." : "Steady appreciation with moderate volatility."}`;
 }
 
 function DetailPanel({ card }) {
@@ -147,7 +148,7 @@ function DetailPanel({ card }) {
       </div>
 
       <div className="ai-analysis">
-        <div className="ai-label">{t ? t("dashboard.aiAnalysis") : "AI ANALYSIS"}</div>
+        <div className="ai-label">{t("dashboard.aiAnalysis")}</div>
         <p>{getAnalysis(card)}</p>
       </div>
     </div>
