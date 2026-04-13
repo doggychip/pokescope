@@ -7,11 +7,9 @@ const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const isDevMode = !clerkKey || clerkKey === "pk_test_PLACEHOLDER";
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-let useClerkUser, useClerkAuth;
+let clerkModule = null;
 if (!isDevMode) {
-  const clerk = await import("@clerk/clerk-react");
-  useClerkUser = clerk.useUser;
-  useClerkAuth = clerk.useAuth;
+  clerkModule = await import("@clerk/clerk-react");
 }
 
 const ERAS = ["All", "WOTC", "Gold Star", "e-Series", "Promo", "Modern", "Classic"];
@@ -155,20 +153,22 @@ function DetailPanel({ card }) {
   );
 }
 
-function UserMenu() {
+function UserMenuDev() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  return (
+    <div className="user-menu">
+      <span className="user-plan-badge free">{t("dashboard.planFree")}</span>
+      <button className="btn-upgrade" onClick={() => navigate("/#pricing")}>{t("dashboard.upgrade")}</button>
+    </div>
+  );
+}
 
-  if (isDevMode) {
-    return (
-      <div className="user-menu">
-        <span className="user-plan-badge free">FREE</span>
-        <button className="btn-upgrade" onClick={() => navigate("/#pricing")}>Upgrade</button>
-      </div>
-    );
-  }
-
-  const { user } = useClerkUser();
-  const { signOut } = useClerkAuth();
+function UserMenuClerk() {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { user } = clerkModule.useUser();
+  const { signOut } = clerkModule.useAuth();
 
   const handleUpgrade = async (tier = "pro") => {
     try {
@@ -186,12 +186,16 @@ function UserMenu() {
 
   return (
     <div className="user-menu">
-      <span className="user-plan-badge free">FREE</span>
-      <button className="btn-upgrade" onClick={() => handleUpgrade("pro")}>Upgrade to Pro</button>
+      <span className="user-plan-badge free">{t("dashboard.planFree")}</span>
+      <button className="btn-upgrade" onClick={() => handleUpgrade("pro")}>{t("dashboard.upgrade")}</button>
       <span className="user-name">{user?.firstName || user?.emailAddresses?.[0]?.emailAddress || "User"}</span>
-      <button className="btn-signout" onClick={() => signOut(() => navigate("/"))}>Sign Out</button>
+      <button className="btn-signout" onClick={() => signOut(() => navigate("/"))}>{t("dashboard.signOut")}</button>
     </div>
   );
+}
+
+function UserMenu() {
+  return isDevMode ? <UserMenuDev /> : <UserMenuClerk />;
 }
 
 export default function App() {
