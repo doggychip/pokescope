@@ -1,12 +1,12 @@
 /* Fix: Constrain dashboard layout to viewport */
-#root > div {
+.dashboard {
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
 }
 
-.header, .stats-bar, .filters, .footer {
+.dashboard .header, .dashboard .stats-bar, .dashboard .filters, .dashboard .footer {
   flex-shrink: 0;
 }
 

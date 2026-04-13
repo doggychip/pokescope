@@ -323,7 +323,7 @@ export default function App() {
   const sortOptions = getSortOptions(t);
 
   return (
-    <div>
+    <div className="dashboard">
       {/* Header */}
       <div className="header">
         <div className="header-inner">
