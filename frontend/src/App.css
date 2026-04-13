@@ -1,3 +1,28 @@
+/* Fix: Constrain dashboard layout to viewport */
+#root > div {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.header, .stats-bar, .filters, .footer {
+  flex-shrink: 0;
+}
+
+.table-wrap {
+  flex: 1 1 0;
+  overflow-y: auto;
+  min-height: 120px;
+}
+
+.detail-panel {
+  flex: 0 1 auto;
+  max-height: 45vh;
+  overflow-y: auto;
+  margin-bottom: 0;
+}
+
 /* Header */
 .header {
   border-bottom: 1px solid rgba(255,255,255,0.06);
