@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useTranslation, LANGS, langPrefix } from "./i18n/index.jsx";
+import MarketDashboard from "./MarketDashboard.jsx";
 import "./Landing.css";
 
 const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -108,6 +109,9 @@ export default function Landing() {
           </div>
         ))}
       </section>
+
+      {/* Live Market Dashboard */}
+      <MarketDashboard />
 
       {/* Screenshot preview */}
       <section className="preview">
