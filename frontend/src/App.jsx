@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation, LANGS, langPrefix } from "./i18n/index.jsx";
 import "./App.css";
@@ -266,6 +266,30 @@ export default function App() {
   const [selectedCard, setSelectedCard] = useState(null);
   const [modalImg, setModalImg] = useState(null);
   const [loading, setLoading] = useState(true);
+  const tableWrapRef = useRef(null);
+
+  // Dismiss detail panel on scroll
+  useEffect(() => {
+    if (!selectedCard) return;
+
+    const handleScroll = () => setSelectedCard(null);
+
+    document.addEventListener('wheel', handleScroll, { capture: true, passive: true });
+    document.addEventListener('touchmove', handleScroll, { capture: true, passive: true });
+
+    const tableWrap = tableWrapRef.current;
+    if (tableWrap) {
+      tableWrap.addEventListener('scroll', handleScroll, { passive: true });
+    }
+
+    return () => {
+      document.removeEventListener('wheel', handleScroll, { capture: true });
+      document.removeEventListener('touchmove', handleScroll, { capture: true });
+      if (tableWrap) {
+        tableWrap.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, [selectedCard]);
 
   // Handle ?upgrade=pro or ?upgrade=dealer from pricing page
   useEffect(() => {
@@ -395,7 +419,7 @@ export default function App() {
       {loading ? (
         <div className="loading">{t("dashboard.loading")}</div>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap" ref={tableWrapRef}>
           <table className="card-table">
             <thead>
               <tr>
